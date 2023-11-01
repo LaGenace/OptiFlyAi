@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "skyscanner-insights-343713",
+  "private_key_id": "04a5b10457082587a9071416ba5ece8b4ef15df2",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC4kcD3Fo+MNewZ\nfm/mzIIMWt01q76UaLXOq31j0+jIascXwUWtwygvVwMbaKsmyj1scRIZXIL4SlJy\nVIADkQ5WuDIgSF0jqjsC2RjzZBG7tpOOVhTBrXvmXAkK9Qa86utvXGwNvqXLo0mG\nscZU7NlG/GqaNpBp3rbxWgVEADKAqdFyRd3KNx/bNXjvVTNOt8o9qqmzjksOaTJZ\nkSLBtW/fMJykD9d2XHm4w7gcD9dpMhcvffZS/0M3Yad6EI4q6F/4BnvOCbsfkACE\nDUU6VK00I5G2bCWcL0AedEaKKUhxcNpn4z4QMtrWPJx1Rb98THFU5nAbHby7xT/5\n8d3hExKvAgMBAAECggEAAhFX9ZwAtE5WhNkIhINg5I+sClSg+lokkbjR2zHNImTM\nt9uhGx/9ayGojY6fM40jAIG1WXYVYxus1TgzTbsZeBFrbf77+xlk/2qxOgqRASmr\nCcntLo+Cm0Yd0TW9GYrlm2H/eEB47INr2AUHq7/Piqciw9I4PGYDAeRqVWHefOMc\n8E4dRu0iM6zrsnTr0UTY3ZWh50ujFUNiVPF7MSmb7yVbpD8mISgLqHOIIuAQV44P\nm4wBgSZO1IlC7VcyveT7p7Ux9zyz//VN68thY/fI3aWGtUET2cqIGnQyU8Zet7no\nixc4V+ViDz24vVPp4cThonWIcsVl9mHeRw9/ByOIyQKBgQDcfXR4dBBiBXSwP/+V\nriTWlAW9GgHEOenLO7YU+7c4QBexeV7Dnx5OsxAJFpyoRM85baYoo+9m9QkjbY5H\nONfjKwNc/EmACc6gB8L60YcWBME0etn7PiVUVjpbrQNLs5bWc6E8h5RfIrXKhvhR\nuRi0CRDbIAvgM2Rau1FrPaAB5QKBgQDWS1SUvdYQII2geKpmD8utda94zkCU4zDx\nB9F0wWSpkhB5F55BKuiBWYODjaJzqPPm6fQeakHg/3HiDkjLJn3DZpXnOuB36s7t\nGgq4/5hY8OlMHkgW5xmG1ub61jwtCW5o3zFUqKAbCdDGd9hWuXYS0GRXflg79oqo\nUBA4DXoJAwKBgQCurJiroE8mSGo0As9o9gfrEmMld0f0+2hTAB/0qaFx55ydlahU\nU2dAM609dfNvfuun9EzRH2ZWa0LtFSrFE6w8JGRKsvdLfvl5YAzAhWN+NxAUkkrE\nNmx+Tr12yS62NzUE+Z+/gy0w3R+lrZ1lqLyATDpVTiL6X9xd4M3UpoJvXQKBgAse\nDV1KG/jqN27D09NHroFpQZk62g7fWoKmrS8peVdyxHgDyaoH19geFLyWdH8bnMu2\nB3wsdw59MiNQKmafsJaak9xTKaIPBH04hKXkXLsAhJn2WDcX9jMQoxsQUj7j5l56\ndcy2ktfUQoiJXyfgp0eCmDIR0/IIcFkbDjxaNqKRAoGAYpE8d2wbAqEpyNuSge4Q\nb3P15BldPT6kwSPLJ3N+/DHJyZCp0/SIMM1cE+ysoKpbtNQGY13rMh2HVkM2xhlK\nIo7rmZ5rQUMYYXLYnvAMYSaz7LRJW4UDoK0Zoh0dRL0M97rEMtpfdgKdtU1Xono4\nzm23ScKn0zGymQw+I33072Y=\n-----END PRIVATE KEY-----\n",
+  "client_email": "query-skyscanner-data@skyscanner-insights-343713.iam.gserviceaccount.com",
+  "client_id": "111608317746040076234",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/query-skyscanner-data%40skyscanner-insights-343713.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
