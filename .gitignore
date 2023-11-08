@@ -1,5 +1,6 @@
 .python-version
 raw_data
 .DS_Store
+.env
 .ipynb_checkpoints/
 __pycache__/
