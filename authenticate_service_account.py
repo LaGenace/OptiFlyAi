@@ -16,7 +16,7 @@ import os
 
 
 def main():
-    key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    key_path = os.environ.get("KEY_PATH")
 
     # [START bigquery_client_json_credentials]
     from google.cloud import bigquery

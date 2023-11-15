@@ -8,3 +8,5 @@ matplotlib
 seaborn
 scikit-learn
 google-cloud-bigquery
+python-decouple
+db-dtypes
