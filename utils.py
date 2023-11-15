@@ -1,7 +1,22 @@
 
+def redirect_raio(df):
+    """
+    This function creates a new column called 'redirect_ratio'
+    It uses the ItineraryRedirects & ODRedirects columns
+    """
+
+    # This prevents a warning from working on a slice of a dataframe
+    data = df.copy()
+
+    # This creates a new column, which is a ratio of ItineraryRedirects & ODRedirects
+    data['redirect_ratio'] = data['ItineraryRedirects'] / data['ODRedirects']
+
+    return data
+
 def create_od_column(df, raw_od_columns):
     """
     This creates a column to identify OD's
+    raw_od_columns is a list of two columns - Origin first then Destination
     Depending on the columns, it can be used on City or Airport
     """
     df['OD'] = df[raw_od_columns[0]] + df[raw_od_columns[1]]
@@ -12,6 +27,7 @@ def create_od_column(df, raw_od_columns):
 def calculate_total_segment_times(df):
     """
     This add all the segment times together
+    Creates a new column called total_travel_time
     """
 
     # Create list of values to fill columns with - if this is not done you get a warning
@@ -20,7 +36,7 @@ def calculate_total_segment_times(df):
     df.fillna(value=values, inplace=True)
 
     # Adds them up
-    df['total_seg_time'] = df['Seg_0_DurationMin'] + df['Seg_1_DurationMin'] + df['Seg_2_DurationMin'] + df['Seg_3_DurationMin']
+    df['total_travel_time'] = df['Seg_0_DurationMin'] + df['Seg_1_DurationMin'] + df['Seg_2_DurationMin'] + df['Seg_3_DurationMin']
 
     return df
 
@@ -28,14 +44,17 @@ def calculate_total_layover_time(df, as_ratio=False):
     """
     Creates a total layover time by subtracting flight duration with segment times
     You can choose between a ratio or absolute value
+    Creates a new column called total_layover_time
+    If as_ratio is True, also creates a column callled total_layover_time_ratio
     """
 
     # Runs function to create segment times
     df_with_segment_time = calculate_total_segment_times(df)
 
-    # Calculates total layover time
+    # Calculates total layover time and creates a new column
     df_with_segment_time['total_layover_time'] = df_with_segment_time['DurationMin'] - df_with_segment_time['total_seg_time']
 
+    # Creates layover ratio as a new column
     if as_ratio == True:
         df_with_segment_time['total_layover_time_ratio'] = df_with_segment_time['total_layover_time'] / df_with_segment_time['DurationMin']
         return df_with_segment_time
@@ -57,7 +76,9 @@ def drop_neg_layover_time(df):
 def calculate_total_distance(df):
     """
     This calculates the total distance traveled from each segment
+    And creates a new column called total_distance_traveled
     """
+
     # This avoids warnings about working on a slice of a dataframe
     copy = df.copy()
 
@@ -67,7 +88,7 @@ def calculate_total_distance(df):
     # Fills the values
     copy.fillna(value=values, inplace=True)
 
-    # Adds them up
+    # Adds them up and creates a new column
     copy['total_distance_traveled'] = copy['Seg_0_TravelDistanceKm'] + copy['Seg_1_TravelDistanceKm'] + copy['Seg_2_TravelDistanceKm'] + copy['Seg_3_TravelDistanceKm']
 
     return copy
@@ -77,6 +98,7 @@ def calculate_distance_difference(df, as_ratio=False):
     """
     Calculates the difference between total distance traveled and 'straight line' distance
     Can be set to be ratio or absolute difference
+    Depending on as_ratio, it creates a new column extra_travel_distance OR extra_travel_distance_ratio
     """
 
     # This runs a function that calcualtes total distance traveled
