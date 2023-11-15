@@ -10,3 +10,4 @@ scikit-learn
 google-cloud-bigquery
 python-decouple
 db-dtypes
+google-auth
