@@ -1,5 +1,5 @@
 
-def redirect_raio(df):
+def redirect_ratio(df):
     """
     This function creates a new column called 'redirect_ratio'
     It uses the ItineraryRedirects & ODRedirects columns
