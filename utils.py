@@ -23,6 +23,16 @@ def create_od_column(df, raw_od_columns):
 
     return df
 
+def create_od_ctry(df, raw_od_columns):
+    """
+    This creates a column to identify OD's
+    raw_od_columns is a list of two columns - Origin first then Destination
+    Depending on the columns, it can be used on City or Airport
+    """
+    df['OD_ctry'] = df[raw_od_columns[0]] + df[raw_od_columns[1]]
+
+    return df
+
 
 def calculate_total_segment_times(df):
     """
@@ -114,15 +124,17 @@ def calculate_distance_difference(df, as_ratio=False):
     return copy
 
 
-def preprocess(df, raw_od_columns, as_ratio=False):
+def preprocess(df, raw_od_columns, raw_od_ctry, as_ratio=False):
     """
     This runs all the preprocessing functions
     """
 
-    df_with_ratio = redirect_raio(df)
+    df_with_ratio = redirect_ratio(df)
 
     # This creates a column to identify OD's
     df_with_od = create_od_column(df_with_ratio, raw_od_columns)
+
+    df_with_od = create_od_ctry(df_with_ratio, raw_od_ctry)
 
     # This calculates the total segment times
     df_with_segment_time = calculate_total_segment_times(df_with_od)
