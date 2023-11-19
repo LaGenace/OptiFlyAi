@@ -119,7 +119,7 @@ def preprocess(df, raw_od_columns, as_ratio=False):
     This runs all the preprocessing functions
     """
 
-    df_with_ratio = redirect_raio(df)
+    df_with_ratio = redirect_ratio(df)
 
     # This creates a column to identify OD's
     df_with_od = create_od_column(df_with_ratio, raw_od_columns)

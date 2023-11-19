@@ -5,3 +5,5 @@ raw_data
 .ipynb_checkpoints/
 __pycache__/
 secrets
+__init__.py
+
