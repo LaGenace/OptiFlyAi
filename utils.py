@@ -1,3 +1,5 @@
+from sklearn.model_selection import train_test_split
+
 
 def redirect_ratio(df):
     """
@@ -152,3 +154,18 @@ def preprocess(df, raw_od_columns, raw_od_ctry, as_ratio=False):
     df_final = drop_neg_layover_time(df_with_distance_diff)
 
     return df_final
+
+
+def create_train_test_split(df, target_name:str, random_states=42):
+    """
+    Returns X_train, X_test, y_train, y_test
+    Input is the df, and the name of the target as a string
+    If you wish, you can adjust the random state
+    """
+
+    features = df.drop(target_name, axis=1)
+    target = df[target_name]
+
+    X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=random_states)
+
+    return X_train, X_test, y_train, y_test
