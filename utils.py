@@ -52,7 +52,7 @@ def calculate_total_layover_time(df, as_ratio=False):
     df_with_segment_time = calculate_total_segment_times(df)
 
     # Calculates total layover time and creates a new column
-    df_with_segment_time['total_layover_time'] = df_with_segment_time['DurationMin'] - df_with_segment_time['total_seg_time']
+    df_with_segment_time['total_layover_time'] = df_with_segment_time['DurationMin'] - df_with_segment_time['total_travel_time']
 
     # Creates layover ratio as a new column
     if as_ratio == True:
@@ -112,3 +112,31 @@ def calculate_distance_difference(df, as_ratio=False):
         copy['extra_travel_distance_ratio'] =  copy['total_distance_traveled'] / copy['TravelDistanceKm']
 
     return copy
+
+
+def preprocess(df, raw_od_columns, as_ratio=False):
+    """
+    This runs all the preprocessing functions
+    """
+
+    df_with_ratio = redirect_raio(df)
+
+    # This creates a column to identify OD's
+    df_with_od = create_od_column(df_with_ratio, raw_od_columns)
+
+    # This calculates the total segment times
+    df_with_segment_time = calculate_total_segment_times(df_with_od)
+
+    # This calculates the total layover time
+    df_with_layover_time = calculate_total_layover_time(df_with_segment_time, as_ratio)
+
+    # This calculates the total distance traveled
+    df_with_distance = calculate_total_distance(df_with_layover_time)
+
+    # This calculates the difference between total distance traveled and 'straight line' distance
+    df_with_distance_diff = calculate_distance_difference(df_with_distance, as_ratio)
+
+    # This drops all rows with neg layover time
+    df_final = drop_neg_layover_time(df_with_distance_diff)
+
+    return df_final
