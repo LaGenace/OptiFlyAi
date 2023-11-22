@@ -10,3 +10,6 @@ scikit-learn
 google-cloud-bigquery
 python-decouple
 db-dtypes
+category_encoders
+tensorflow
+keras
