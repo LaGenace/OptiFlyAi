@@ -12,3 +12,4 @@ python-decouple
 db-dtypes
 google-auth
 category_encoders
+tensorflow
