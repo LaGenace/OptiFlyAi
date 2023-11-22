@@ -6,4 +6,4 @@ raw_data
 __pycache__/
 secrets
 __init__.py
-
+models
