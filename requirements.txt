@@ -13,3 +13,4 @@ db-dtypes
 google-auth
 category_encoders
 tensorflow
+keras
