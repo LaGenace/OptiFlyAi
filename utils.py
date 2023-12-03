@@ -139,18 +139,20 @@ def scale_itin_redirects(df, column_to_scale, min, max):
     # Z-score normalization per OD
     data['Z_Score'] = data.groupby('OD')[column_to_scale].transform(zscore)
 
-    # Min-Max scaling per OD
-    scaler = MinMaxScaler()
-    data['MinMax_Scaled'] = data.groupby('OD')[column_to_scale].transform(lambda x: scaler.fit_transform(x.values.reshape(-1, 1)).flatten())
+    # # Min-Max scaling per OD
+    # scaler = MinMaxScaler()
+    # data['MinMax_Scaled'] = data.groupby('OD')[column_to_scale].transform(lambda x: scaler.fit_transform(x.values.reshape(-1, 1)).flatten())
 
-    data['Score_min_max'] = data['MinMax_Scaled']*np.log(data['ODRedirects']+1)
+    # data['Score_min_max'] = data['MinMax_Scaled']*np.log(data['ODRedirects']+1)
     data['Score_Z_score'] = data['Z_Score']*np.log(data['ODRedirects']+1)
 
     # Scale the Z-score to be between 0 and 50
-    max_scaled_value = max
-    min_scaled_value = min
+    # Pre-calculate the minimum and maximum Z-scores
+    z_min = data['Z_Score'].min()
+    z_max = data['Z_Score'].max()
 
-    data['Score_Z_score_0_50'] = ((data['Z_Score'] - data['Z_Score'].min()) / (data['Z_Score'].max() - data['Z_Score'].min())) * (max_scaled_value - min_scaled_value) + min_scaled_value
+    # Apply the scaling using pre-calculated min and max values
+    data['Score_Z_score_0_50'] = ((data['Z_Score'] - z_min) / (z_max - z_min)) * (max - min) + min
 
     return data
 
