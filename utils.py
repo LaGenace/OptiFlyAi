@@ -200,3 +200,23 @@ def create_train_test_split(df, target_name:str, random_states=42):
     X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=random_states)
 
     return X_train, X_test, y_train, y_test
+
+
+def preprocess_test_set(df):
+    """
+    This runs all the preprocessing functions
+    """
+    df['SelfTransfer'] = 1
+
+    df['total_layover_time_ratio'] = df['connection_time']/(df['total_minutes']+ df['connection_time'])
+    df['extra_travel_distance_ratio'] = df['total_distance'] / df['direct_distance']
+
+    # This drops all rows with neg layover time
+    df['PricePerPax'] = df['total_price'] / df['pax']
+
+    df_final = df[['direct_distance', 'days_to_travel', 'SelfTransfer', 'total_layover_time_ratio', 'extra_travel_distance_ratio', 'PricePerPax']]
+
+    df_final.loc[:, 'extra_travel_distance_ratio'] = np.log1p(df_final['extra_travel_distance_ratio']+ 1e-9)  # 1e-9 is a small constant to offset zero values
+    df_final.loc[:, 'PricePerPax'] = np.log1p(df_final['PricePerPax']+ 1e-9)  # 1e-9 is a small constant to offset zero values
+
+    return df_final
