@@ -2,3 +2,8 @@
 raw_data
 .DS_Store
 .env
+.ipynb_checkpoints/
+__pycache__/
+secrets
+__init__.py
+models
