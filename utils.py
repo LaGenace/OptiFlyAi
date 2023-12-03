@@ -1,4 +1,7 @@
 from sklearn.model_selection import train_test_split
+from scipy.stats import zscore
+from sklearn.preprocessing import MinMaxScaler
+import numpy as np
 
 
 def redirect_ratio(df):
@@ -22,6 +25,16 @@ def create_od_column(df, raw_od_columns):
     Depending on the columns, it can be used on City or Airport
     """
     df['OD'] = df[raw_od_columns[0]] + df[raw_od_columns[1]]
+
+    return df
+
+def create_od_ctry(df, raw_od_columns):
+    """
+    This creates a column to identify OD's
+    raw_od_columns is a list of two columns - Origin first then Destination
+    Depending on the columns, it can be used on City or Airport
+    """
+    df['OD_ctry'] = df[raw_od_columns[0]] + df[raw_od_columns[1]]
 
     return df
 
@@ -115,8 +128,34 @@ def calculate_distance_difference(df, as_ratio=False):
 
     return copy
 
+def scale_itin_redirects(df, column_to_scale, min, max):
+    """
+    This scales the ItineraryRedirects column
+    """
 
-def preprocess(df, raw_od_columns, as_ratio=False):
+    # This prevents a warning from working on a slice of a dataframe
+    data = df.copy()
+
+    # Z-score normalization per OD
+    data['Z_Score'] = data.groupby('OD')[column_to_scale].transform(zscore)
+
+    # Min-Max scaling per OD
+    scaler = MinMaxScaler()
+    data['MinMax_Scaled'] = data.groupby('OD')[column_to_scale].transform(lambda x: scaler.fit_transform(x.values.reshape(-1, 1)).flatten())
+
+    data['Score_min_max'] = data['MinMax_Scaled']*np.log(data['ODRedirects']+1)
+    data['Score_Z_score'] = data['Z_Score']*np.log(data['ODRedirects']+1)
+
+    # Scale the Z-score to be between 0 and 50
+    max_scaled_value = max
+    min_scaled_value = min
+
+    data['Score_Z_score_0_50'] = ((data['Z_Score'] - data['Z_Score'].min()) / (data['Z_Score'].max() - data['Z_Score'].min())) * (max_scaled_value - min_scaled_value) + min_scaled_value
+
+    return data
+
+
+def preprocess(df, raw_od_columns, raw_od_ctry, as_ratio=False):
     """
     This runs all the preprocessing functions
     """
@@ -125,6 +164,8 @@ def preprocess(df, raw_od_columns, as_ratio=False):
 
     # This creates a column to identify OD's
     df_with_od = create_od_column(df_with_ratio, raw_od_columns)
+
+    df_with_od = create_od_ctry(df_with_ratio, raw_od_ctry)
 
     # This calculates the total segment times
     df_with_segment_time = calculate_total_segment_times(df_with_od)
@@ -141,7 +182,9 @@ def preprocess(df, raw_od_columns, as_ratio=False):
     # This drops all rows with neg layover time
     df_final = drop_neg_layover_time(df_with_distance_diff)
 
-    return df_final
+    df_scaled = scale_itin_redirects(df_final, 'ItineraryRedirects', 0, 50)
+
+    return df_scaled
 
 
 def create_train_test_split(df, target_name:str, random_states=42):

@@ -10,6 +10,8 @@ scikit-learn
 google-cloud-bigquery
 python-decouple
 db-dtypes
+tensorflow-macos
+category-encoders
 google-auth
 category_encoders
 tensorflow
