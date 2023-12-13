@@ -2,6 +2,7 @@ from sklearn.model_selection import train_test_split
 from scipy.stats import zscore
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
+import pandas as pd
 
 
 def redirect_ratio(df):
@@ -220,3 +221,58 @@ def preprocess_test_set(df):
     df_final.loc[:, 'PricePerPax'] = np.log1p(df_final['PricePerPax']+ 1e-9)  # 1e-9 is a small constant to offset zero values
 
     return df_final
+
+def classification_evaluation(Dohop_test_dataset, model, scaler):
+    """ This function evaluates the regression model on the Dohop Test dataset.
+    It scales the dataset and applies the model to it.
+    It then buckets the dohop dataset into 2 buckets: booked and not booked.
+    It then finds the highest cutoff threshold possible, while maintaining the
+    condition that at no booked itinerary lies on or below the threshold.
+
+    If the condition cannot be met, the function returns a warning string.
+    """
+    # Create a copy of the Dohop datast
+    data = Dohop_test_dataset.copy()
+
+    # Create a copy of the bookings column, drop it, and scale all remaining columns
+    bookings_column = data["bookings"].copy()
+
+    data.drop(columns=["bookings"], inplace=True)
+
+    data = scaler.transform(data)
+
+    data = pd.DataFrame(data, columns=Dohop_test_dataset.columns)
+
+    # Applying the prediction model to the Dohop dataset and adding as new column
+    data["predicted_score"] = model.predict(data).flatten()
+
+    # Adding the bookings column back to the dataset
+
+    data["bookings"] = bookings_column
+
+    # Create a new colummn bucketed into "booked" and "not-booked"
+    data["status"] = np.where(data["bookings"] > 0, "booked", "not-booked")
+
+    # Filter down the dataset to those rows which were booked
+    booked_data = data[data["status"] == "booked"]
+
+    # Filter down the dataset to those rows which were not booked
+    not_booked_data = data[data["status"] == "not-booked"]
+
+    # Compute minimum score threshold for booked and not-booked data
+    min_booked_score = data.loc[data["status"] == "booked", "predicted_score"].min()
+    min_not_booked_score = data.loc[data["status"] == "not-booked", "predicted_score"].min()
+
+    # Check for the edge case and issue a warning, if it applies
+    if min_booked_score < min_not_booked_score:
+        return "Edge case encountered: Min score of booked rows is lower than min score of not-booked rows."
+
+    metrics = {"min_threshold": min_booked_score,
+               "total_rows": data.shape[0],
+               "TP": booked_data[data["predicted_score"] >= min_booked_score].shape[0],
+               "FP": not_booked_data[data["predicted_score"] >= min_booked_score].shape[0],
+               "TN": not_booked_data[data["predicted_score"] < min_booked_score].shape[0],
+               "FN": booked_data[data["predicted_score"] < min_booked_score].shape[0],
+               }
+
+    return metrics
