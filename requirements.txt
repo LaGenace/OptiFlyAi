@@ -18,3 +18,4 @@ tensorflow
 keras
 SALib
 shap
+category_encoders
