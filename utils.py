@@ -241,7 +241,10 @@ def classification_evaluation(Dohop_test_dataset, model, scaler):
 
     data = scaler.transform(data)
 
-    data = pd.DataFrame(data, columns=Dohop_test_dataset.columns)
+    # Create a new DataFrame with the scaled data
+    # Exclude the 'bookings' column from the columns list
+    scaled_columns = [col for col in Dohop_test_dataset.columns if col != 'bookings']
+    data = pd.DataFrame(data, columns=scaled_columns)
 
     # Applying the prediction model to the Dohop dataset and adding as new column
     data["predicted_score"] = model.predict(data).flatten()
