@@ -2,6 +2,10 @@ from sklearn.model_selection import train_test_split
 from scipy.stats import zscore
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
+import pandas as pd
+import category_encoders as ce
+from scipy import stats
+
 
 
 def redirect_ratio(df):
@@ -220,3 +224,142 @@ def preprocess_test_set(df):
     df_final.loc[:, 'PricePerPax'] = np.log1p(df_final['PricePerPax']+ 1e-9)  # 1e-9 is a small constant to offset zero values
 
     return df_final
+
+def convert_bool_to_num(value):
+    """
+    This converts bulian values to 0 or 1, but flips True and False
+    So False will == 1, and True == 0
+    This is is used when False values are seen as 'superior' to True values
+    """
+    return 0 if value else 1
+
+
+def all_preprocessing(raw_data, columns_to_process, target_creation_function, target,
+                        box_cox_columns=False, yeo_johnson_columns=False, min_max_scaling=False, log_transform_columns=False,
+                        target_func_param1=None, target_func_param2=None, target_func_param3=None):
+    """
+    This functions completes all feature engineering, target creation and scaling
+    RETURNS: updated dataframe and a Class that holds all the scalers
+
+    Notes:
+    - It will only return columns in columns_to_process and the target
+    """
+
+    #FEATURE ENGINEERING SECTION
+
+    # This creates a column to identify OD's
+    raw_data['OD'] = raw_data['OriginCty'] + raw_data['DestinationCty']
+
+    # This calculates the total layover time with ratio
+    raw_data['total_layover_time'] = raw_data['DurationMin'] - raw_data['Total_Flight_Duration']
+    raw_data['total_layover_time_ratio'] =raw_data['total_layover_time'] /raw_data['DurationMin']
+
+    # This calculates the difference between total distance traveled and 'straight line' distance
+    raw_data['extra_travel_distance'] = raw_data['Total_Flight_Distance'] - raw_data['TravelDistanceKm']
+    raw_data['extra_travel_distance_ratio'] =  raw_data['Total_Flight_Distance'] / raw_data['TravelDistanceKm']
+
+    # This drops all rows with neg layover time
+    data_engineered = drop_neg_layover_time(raw_data)
+
+    # Create the target
+    #First ensure ItineraryRedirects is float as zscore doesnt work with int
+    # data_engineered['ItineraryRedirects'] = data_engineered['ItineraryRedirects'].astype('float64')
+    # Then create the target
+    processed_data = target_creation_function(data_engineered, target_func_param1, target_func_param2, target_func_param3)
+
+    # Seperating target so encoders dont store a df shape that is larger than real-world data
+    # This is so encoders do not expect the extra column when running on new data, which will not have a target
+    y = processed_data[target]
+
+    model_data = processed_data.drop(columns=[target])
+
+    #BINARY ENCODING
+
+    #Binary encoding origin and destination
+    o_encoder = ce.BinaryEncoder()
+    origin_apt_encoded = o_encoder.fit_transform(model_data['OriginApt'])
+
+    d_encoder = ce.BinaryEncoder()
+    destination_apt_encoded = d_encoder.fit_transform(model_data['DestinationApt'])
+
+    # Binary encoding Operator IATA'
+    seg_0_encoder = ce.BinaryEncoder()
+    seg_0_binary = seg_0_encoder.fit_transform(model_data['Seg_0_OperatingCarrierIATA'])
+
+    seg_1_encoder = ce.BinaryEncoder()
+    seg_1_binary = seg_1_encoder.fit_transform(model_data['Seg_1_OperatingCarrierIATA'])
+
+    seg_2_encoder = ce.BinaryEncoder()
+    seg_2_binary = seg_2_encoder.fit_transform(model_data['Seg_2_OperatingCarrierIATA'])
+
+    seg_3_encoder = ce.BinaryEncoder()
+    seg_3_binary = seg_3_encoder.fit_transform(model_data['Seg_3_OperatingCarrierIATA'])
+
+    #Concatinating newly encoded columns
+    origin_binary = pd.concat([model_data, origin_apt_encoded], axis=1)
+    dest_binary = pd.concat([origin_binary, destination_apt_encoded], axis=1)
+    seg0_bin = pd.concat([dest_binary, seg_0_binary], axis=1)
+    seg1_bin = pd.concat([seg0_bin, seg_1_binary], axis=1)
+    seg2_bin = pd.concat([seg1_bin, seg_2_binary], axis=1)
+    all_binary = pd.concat([seg2_bin, seg_3_binary], axis=1)
+
+    all_binary = all_binary[columns_to_process]
+
+    #SCALING
+    # Box cox
+    if box_cox_columns == False:
+        box_lambda = 0
+    else:
+        for col in box_cox_columns:
+            all_binary[col], box_lambda = stats.boxcox(all_binary[col])
+
+    # Yeo-johnson
+    if yeo_johnson_columns == False:
+        yeo_lambda = 0
+    else:
+        for col in yeo_johnson_columns:
+            all_binary[col], yeo_lambda = stats.yeojohnson(all_binary[col])
+
+    # Log transformations
+    if log_transform_columns == False:
+        pass
+    else:
+        for column in log_transform_columns:
+            all_binary.loc[:, column] = np.log1p(model_data[column])
+
+    #Min max scaling
+    if min_max_scaling == False:
+        minmax_scaler= 0
+    else:
+        minmax_scaler = MinMaxScaler()
+        all_binary[min_max_scaling] = minmax_scaler.fit_transform(all_binary[min_max_scaling])
+
+    # Cyclical encoding
+    all_binary['sin_day'] = np.sin(2 * np.pi * all_binary['dayofweek'] / 7)
+    all_binary['cos_day'] = np.cos(2 * np.pi * all_binary['dayofweek'] / 7)
+
+    all_binary.drop(columns='dayofweek', inplace=True)
+
+    #Inversing the importance of SelfTransfer, so Non Self Transfer is seen as better by the model
+    all_binary['SelfTransfer'] = all_binary['SelfTransfer'].apply(convert_bool_to_num)
+
+    #STORING SCALERS
+    class PreprocessScalers:
+        def __init__(self, o_encoder, d_encoder, box_lambda, yeo_lambda, minmax_scaler,seg_0_encoder, seg_1_encoder, seg_2_encoder, seg_3_encoder):
+                self.o_encoder = o_encoder
+                self.d_encoder = d_encoder
+                self.box_lambda = box_lambda
+                self.yeo_lambda = yeo_lambda
+                self.minmax_scaler = minmax_scaler
+                self.seg_0_encoder = seg_0_encoder
+                self.seg_1_encoder = seg_1_encoder
+                self.seg_2_encoder = seg_2_encoder
+                self.seg_3_encoder = seg_3_encoder
+
+    scalers = PreprocessScalers(o_encoder, d_encoder, box_lambda, yeo_lambda, minmax_scaler,seg_0_binary, seg_1_binary, seg_2_binary, seg_3_binary)
+
+    #Adding y into dataset
+    all_binary[target] = y
+
+    # Returning dataframe and scalers
+    return all_binary, scalers
