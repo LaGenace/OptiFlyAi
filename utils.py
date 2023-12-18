@@ -236,6 +236,7 @@ def convert_bool_to_num(value):
 
 def all_preprocessing(raw_data, columns_to_process, target_creation_function, target,
                         box_cox_columns=False, yeo_johnson_columns=False, min_max_scaling=False, log_transform_columns=False,
+                        od_encoding=False, operator_encoding=False,
                         target_func_param1=None, target_func_param2=None, target_func_param3=None):
     """
     This functions completes all feature engineering, target creation and scaling
@@ -244,6 +245,12 @@ def all_preprocessing(raw_data, columns_to_process, target_creation_function, ta
     Notes:
     - It will only return columns in columns_to_process and the target
     """
+
+    #DATA CLEANING
+
+    # All int64 columns need to be float64, or some functions don't work. e.g zscore
+    for column in raw_data.select_dtypes(include=['int64']).columns:
+        raw_data[column] = raw_data[column].astype('float64')
 
     #FEATURE ENGINEERING SECTION
 
@@ -262,9 +269,6 @@ def all_preprocessing(raw_data, columns_to_process, target_creation_function, ta
     data_engineered = drop_neg_layover_time(raw_data)
 
     # Create the target
-    #First ensure ItineraryRedirects is float as zscore doesnt work with int
-    # data_engineered['ItineraryRedirects'] = data_engineered['ItineraryRedirects'].astype('float64')
-    # Then create the target
     processed_data = target_creation_function(data_engineered, target_func_param1, target_func_param2, target_func_param3)
 
     # Seperating target so encoders dont store a df shape that is larger than real-world data
@@ -274,65 +278,91 @@ def all_preprocessing(raw_data, columns_to_process, target_creation_function, ta
     model_data = processed_data.drop(columns=[target])
 
     #BINARY ENCODING
+    # Binary encoding origin and destination
+    if od_encoding:
+        o_encoder = ce.BinaryEncoder()
+        origin_apt_encoded = o_encoder.fit_transform(model_data['OriginApt'])
+        columns_to_process.extend(origin_apt_encoded.columns.to_list())
 
-    #Binary encoding origin and destination
-    o_encoder = ce.BinaryEncoder()
-    origin_apt_encoded = o_encoder.fit_transform(model_data['OriginApt'])
+        d_encoder = ce.BinaryEncoder()
+        destination_apt_encoded = d_encoder.fit_transform(model_data['DestinationApt'])
+        columns_to_process.extend(destination_apt_encoded.columns.to_list())
 
-    d_encoder = ce.BinaryEncoder()
-    destination_apt_encoded = d_encoder.fit_transform(model_data['DestinationApt'])
+        #Concatinating newly encoded columns
+        origin_binary = pd.concat([model_data, origin_apt_encoded], axis=1)
+        dest_binary = pd.concat([origin_binary, destination_apt_encoded], axis=1)
+    else:
+        o_encoder = None
+        d_encoder = None
+        dest_binary = model_data.copy()
 
     # Binary encoding Operator IATA'
-    seg_0_encoder = ce.BinaryEncoder()
-    seg_0_binary = seg_0_encoder.fit_transform(model_data['Seg_0_OperatingCarrierIATA'])
+    if operator_encoding:
+        seg_0_encoder = ce.BinaryEncoder()
+        seg_0_binary = seg_0_encoder.fit_transform(model_data['Seg_0_OperatingCarrierIATA'])
+        columns_to_process.extend(seg_0_binary.columns.to_list())
 
-    seg_1_encoder = ce.BinaryEncoder()
-    seg_1_binary = seg_1_encoder.fit_transform(model_data['Seg_1_OperatingCarrierIATA'])
+        seg_1_encoder = ce.BinaryEncoder()
+        seg_1_binary = seg_1_encoder.fit_transform(model_data['Seg_1_OperatingCarrierIATA'])
+        columns_to_process.extend(seg_1_binary.columns.to_list())
 
-    seg_2_encoder = ce.BinaryEncoder()
-    seg_2_binary = seg_2_encoder.fit_transform(model_data['Seg_2_OperatingCarrierIATA'])
+        seg_2_encoder = ce.BinaryEncoder()
+        seg_2_binary = seg_2_encoder.fit_transform(model_data['Seg_2_OperatingCarrierIATA'])
+        columns_to_process.extend(seg_2_binary.columns.to_list())
 
-    seg_3_encoder = ce.BinaryEncoder()
-    seg_3_binary = seg_3_encoder.fit_transform(model_data['Seg_3_OperatingCarrierIATA'])
+        seg_3_encoder = ce.BinaryEncoder()
+        seg_3_binary = seg_3_encoder.fit_transform(model_data['Seg_3_OperatingCarrierIATA'])
+        columns_to_process.extend(seg_3_binary.columns.to_list())
 
-    #Concatinating newly encoded columns
-    origin_binary = pd.concat([model_data, origin_apt_encoded], axis=1)
-    dest_binary = pd.concat([origin_binary, destination_apt_encoded], axis=1)
-    seg0_bin = pd.concat([dest_binary, seg_0_binary], axis=1)
-    seg1_bin = pd.concat([seg0_bin, seg_1_binary], axis=1)
-    seg2_bin = pd.concat([seg1_bin, seg_2_binary], axis=1)
-    all_binary = pd.concat([seg2_bin, seg_3_binary], axis=1)
+        #Concatinating newly encoded columns
+        seg0_bin = pd.concat([dest_binary, seg_0_binary], axis=1)
+        seg1_bin = pd.concat([seg0_bin, seg_1_binary], axis=1)
+        seg2_bin = pd.concat([seg1_bin, seg_2_binary], axis=1)
+        all_binary = pd.concat([seg2_bin, seg_3_binary], axis=1)
+    else:
+        seg_0_encoder = None
+        seg_1_encoder = None
+        seg_2_encoder = None
+        seg_3_encoder = None
+        all_binary = dest_binary.copy()
 
     all_binary = all_binary[columns_to_process]
 
     #SCALING
     # Box cox
-    if box_cox_columns == False:
-        box_lambda = 0
-    else:
+
+    # Dictionary to store best_lambda per column for new data processing
+    box_lambdas = {}
+
+    if box_cox_columns:
         for col in box_cox_columns:
             all_binary[col], box_lambda = stats.boxcox(all_binary[col])
+            box_lambdas[col] = box_lambda
 
     # Yeo-johnson
-    if yeo_johnson_columns == False:
-        yeo_lambda = 0
-    else:
+    # Dictionary to store best_lambda per column for new data processing
+    yeo_lambdas = {}
+
+    if yeo_johnson_columns:
         for col in yeo_johnson_columns:
             all_binary[col], yeo_lambda = stats.yeojohnson(all_binary[col])
+            yeo_lambdas[col] = yeo_lambda
 
     # Log transformations
-    if log_transform_columns == False:
-        pass
-    else:
+    if log_transform_columns:
         for column in log_transform_columns:
             all_binary.loc[:, column] = np.log1p(model_data[column])
 
     #Min max scaling
-    if min_max_scaling == False:
-        minmax_scaler= 0
-    else:
-        minmax_scaler = MinMaxScaler()
-        all_binary[min_max_scaling] = minmax_scaler.fit_transform(all_binary[min_max_scaling])
+    # Dictionary to store min max scaler per column for new data processing
+    min_max_scalers = {}
+
+    if min_max_scaling:
+        for col in min_max_scaling:
+            minmax_scaler = MinMaxScaler()
+            all_binary[col] = minmax_scaler.fit_transform(all_binary[[col]])
+            min_max_scalers[col] = minmax_scaler
+
 
     # Cyclical encoding
     all_binary['sin_day'] = np.sin(2 * np.pi * all_binary['dayofweek'] / 7)
@@ -345,18 +375,18 @@ def all_preprocessing(raw_data, columns_to_process, target_creation_function, ta
 
     #STORING SCALERS
     class PreprocessScalers:
-        def __init__(self, o_encoder, d_encoder, box_lambda, yeo_lambda, minmax_scaler,seg_0_encoder, seg_1_encoder, seg_2_encoder, seg_3_encoder):
+        def __init__(self, o_encoder, d_encoder, box_lambdas, yeo_lambdas, min_max_scalers,seg_0_encoder, seg_1_encoder, seg_2_encoder, seg_3_encoder):
                 self.o_encoder = o_encoder
                 self.d_encoder = d_encoder
-                self.box_lambda = box_lambda
-                self.yeo_lambda = yeo_lambda
-                self.minmax_scaler = minmax_scaler
+                self.box_lambda = box_lambdas
+                self.yeo_lambda = yeo_lambdas
+                self.minmax_scaler = min_max_scalers
                 self.seg_0_encoder = seg_0_encoder
                 self.seg_1_encoder = seg_1_encoder
                 self.seg_2_encoder = seg_2_encoder
                 self.seg_3_encoder = seg_3_encoder
 
-    scalers = PreprocessScalers(o_encoder, d_encoder, box_lambda, yeo_lambda, minmax_scaler,seg_0_binary, seg_1_binary, seg_2_binary, seg_3_binary)
+    scalers = PreprocessScalers(o_encoder, d_encoder, box_lambdas, yeo_lambdas, minmax_scaler,seg_0_encoder, seg_1_encoder, seg_2_encoder, seg_3_encoder)
 
     #Adding y into dataset
     all_binary[target] = y
