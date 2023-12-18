@@ -363,14 +363,16 @@ def all_preprocessing(raw_data, columns_to_process, target_creation_function, ta
             min_max_scalers[col] = minmax_scaler
 
 
-    # Cyclical encoding
-    all_binary['sin_day'] = np.sin(2 * np.pi * all_binary['dayofweek'] / 7)
-    all_binary['cos_day'] = np.cos(2 * np.pi * all_binary['dayofweek'] / 7)
+    if 'dayofweek' in columns_to_process:
+        # Cyclical encoding
+        all_binary['sin_day'] = np.sin(2 * np.pi * all_binary['dayofweek'] / 7)
+        all_binary['cos_day'] = np.cos(2 * np.pi * all_binary['dayofweek'] / 7)
 
-    all_binary.drop(columns='dayofweek', inplace=True)
+        all_binary.drop(columns='dayofweek', inplace=True)
 
-    #Inversing the importance of SelfTransfer, so Non Self Transfer is seen as better by the model
-    all_binary['SelfTransfer'] = all_binary['SelfTransfer'].apply(convert_bool_to_num)
+    if 'SelfTransfer' in columns_to_process:
+        #Inversing the importance of SelfTransfer, so Non Self Transfer is seen as better by the model
+        all_binary['SelfTransfer'] = all_binary['SelfTransfer'].apply(convert_bool_to_num)
 
     #STORING SCALERS
     class PreprocessScalers:
@@ -385,7 +387,7 @@ def all_preprocessing(raw_data, columns_to_process, target_creation_function, ta
                 self.seg_2_encoder = seg_2_encoder
                 self.seg_3_encoder = seg_3_encoder
 
-    scalers = PreprocessScalers(o_encoder, d_encoder, box_lambdas, yeo_lambdas, minmax_scaler,seg_0_encoder, seg_1_encoder, seg_2_encoder, seg_3_encoder)
+    scalers = PreprocessScalers(o_encoder, d_encoder, box_lambdas, yeo_lambdas, min_max_scalers, seg_0_encoder, seg_1_encoder, seg_2_encoder, seg_3_encoder)
 
     #Adding y into dataset
     all_binary[target] = y
