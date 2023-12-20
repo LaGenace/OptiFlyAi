@@ -395,6 +395,152 @@ def all_preprocessing(raw_data, columns_to_process, target_creation_function, ta
     # Returning dataframe and scalers
     return all_binary, scalers
 
+def create_df_of_all_categories(raw_data, data_to_be_processed, column):
+    """
+    This creates a list of all categories, and appends it to existing data that needs processing
+    it appends the data, processes it, and drops the unnecesary columns
+    It then appends it back to the dataframe so it can be used in the next step
+    """
+
+    # Creating dummy data
+    categories  = pd.DataFrame(raw_data[column].unique(), columns=[column])
+
+    # data_to_be_processed = data_to_be_processed.reset_index(drop=True)
+    # categories = categories.reset_index(drop=True)
+
+    # Merged data for encoding
+    merged_data = pd.concat([data_to_be_processed[[column]],categories], axis=0)
+
+    return merged_data
+
+
+def encoding_new_data(original_data, data_to_be_processed, column, encoder):
+    """
+    This function allows for accurate encoding, that matches the training data
+    In order to do that, we need to give the encoder all the options it previously had, otherwise the binary encoding won't align
+    RETURNS: Only the encoded columns
+    """
+    # Creating dummy data from the original data
+    data_with_dummies = create_df_of_all_categories(original_data, data_to_be_processed, column)
+
+    # Encoding the column
+    encoded_columns = encoder.transform(data_with_dummies[column])
+
+    # Removing dummy data
+    real_data = encoded_columns[:len(data_to_be_processed)].copy()
+
+    return real_data
+
+
+def process_new_data(original_data, new_data, scalers, colums_to_keep,
+                     box_cox_columns=False, yeo_johnson_columns=False, log_transform_columns=False, min_max_columns=False,
+                     od_encoding=False, operator_encoding=False):
+    """
+    This function processes new data, using scalers and encoders from the training set
+    It only returns the columns stated in columns_to_keep, and encoded columns if those options flipped to True
+    """
+
+    # DATA CLEANING
+
+    # Filling the Null itinerary_fare data with booked_fare
+    new_data['itinerary_fare'].fillna(new_data['booked_fare'], inplace=True)
+
+    # Dropping data where itinerary_fare remains Null
+    clean_data = new_data.dropna(subset=['itinerary_fare']).copy()
+
+    # FEATURE ENGINEERING
+    clean_data['DurationMin'] = clean_data['flight_time'] + clean_data['connection_time']
+
+    clean_data['total_layover_time'] = clean_data['DurationMin'] - clean_data['flight_time']
+    clean_data['total_layover_time_ratio'] = clean_data['connection_time'] / clean_data['DurationMin']
+
+    clean_data['extra_travel_distance'] = clean_data['total_distance'] - clean_data['direct_distance']
+    clean_data['extra_travel_distance_ratio'] =  clean_data['total_distance'] / clean_data['direct_distance']
+
+    # Renaming the columns
+    col_rename_dict = {'origin': 'OriginApt', 'destination':'DestinationApt', 'days_to_travel':'TravelHorizonDays', 'total_distance':'Total_Flight_Distance',
+                    'direct_distance':'TravelDistanceKm', 'connection_time':'total_layover_time', 'flight_time':'Total_Flight_Duration','itinerary_fare':'PricePerPax',
+                    'seg_0':'Seg_0_OperatingCarrierIATA', 'seg_1':'Seg_1_OperatingCarrierIATA', 'seg_2':'Seg_2_OperatingCarrierIATA', 'seg_3':'Seg_3_OperatingCarrierIATA'}
+
+    clean_data = clean_data.rename(columns=col_rename_dict).copy()
+
+    #TEMP creating Stops and SelfTransfer data
+    clean_data['Stops'] = 1
+    clean_data['SelfTransfer'] = True
+
+    #DATA CLEANING
+    for column in clean_data.select_dtypes(include=['int64']).columns:
+        clean_data[column] = clean_data[column].astype('float64')
+
+    # ENCODING
+    if od_encoding:
+        #Binary encoding origin
+        origin_encoded = encoding_new_data(original_data=original_data, data_to_be_processed=clean_data, column='OriginApt', encoder=scalers.o_encoder)
+
+        # Binary encoding Destination
+        destination_encoded = encoding_new_data(original_data, clean_data, 'DestinationApt', scalers.d_encoder)
+
+        # Updating the dataset with the encoded columns
+        clean_data = pd.concat([clean_data, origin_encoded, destination_encoded], axis=1)
+
+        # Ensuring the columns are returned at the end of the function
+        colums_to_keep.extend(origin_encoded.columns.to_list())
+        colums_to_keep.extend(destination_encoded.columns.to_list())
+
+    if operator_encoding:
+        seg_0_op_iata = encoding_new_data(original_data, clean_data, 'Seg_0_OperatingCarrierIATA', scalers.seg_0_encoder)
+        seg_1_op_iata = encoding_new_data(original_data, clean_data, 'Seg_1_OperatingCarrierIATA', scalers.seg_1_encoder)
+        seg_2_op_iata = encoding_new_data(original_data, clean_data, 'Seg_2_OperatingCarrierIATA', scalers.seg_2_encoder)
+        seg_3_op_iata = encoding_new_data(original_data, clean_data, 'Seg_3_OperatingCarrierIATA', scalers.seg_3_encoder)
+
+        # Updating the dataset with the encoded columns
+        clean_data = pd.concat([clean_data, seg_0_op_iata, seg_1_op_iata, seg_2_op_iata, seg_3_op_iata], axis=1)
+
+        # Ensuring the columns are returned at the end of the function
+        colums_to_keep.extend(seg_0_op_iata.columns.to_list())
+        colums_to_keep.extend(seg_1_op_iata.columns.to_list())
+        colums_to_keep.extend(seg_2_op_iata.columns.to_list())
+        colums_to_keep.extend(seg_3_op_iata.columns.to_list())
+
+
+    # SCALING
+    # Box cox
+    if box_cox_columns:
+        for col in box_cox_columns:
+            clean_data.loc[:,col]  = stats.boxcox(clean_data[col], lmbda=scalers.box_lambda[col])
+
+    # Yeo-johnson
+    if yeo_johnson_columns:
+        for col in yeo_johnson_columns:
+            clean_data.loc[:,col] = stats.yeojohnson(clean_data[col], lmbda=scalers.yeo_lambda[col])
+
+    # Log transformations
+    if log_transform_columns:
+        for col in log_transform_columns:
+            clean_data.loc[:,col] = np.log1p(clean_data[col])
+
+    #Min max scaling
+    if min_max_columns:
+        for col in min_max_columns:
+            clean_data.loc[:,col] = scalers.minmax_scaler[col].transform(clean_data[[col]])
+
+    if 'SelfTransfer' in colums_to_keep:
+        #Inversing the importance of SelfTransfer, so Non Self Transfer is seen as better by the model
+        clean_data['SelfTransfer'] = clean_data['SelfTransfer'].apply(convert_bool_to_num)
+
+    data_to_return = clean_data[colums_to_keep].copy()
+
+    if 'dayofweek' in colums_to_keep:
+        # Cyclical encoding
+        data_to_return['sin_day'] = np.sin(2 * np.pi * data_to_return['dayofweek'] / 7)
+        data_to_return['cos_day'] = np.cos(2 * np.pi * data_to_return['dayofweek'] / 7)
+
+        # Dropping day of week as it is no longer neccesary
+        data_to_return = data_to_return.drop(columns=['dayofweek']).copy()
+
+    return data_to_return
+
+
 def classification_evaluation(Dohop_test_dataset, model, scaler):
     """ This function evaluates the regression model on the Dohop Test dataset.
     It scales the dataset and applies the model to it.
