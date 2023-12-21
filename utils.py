@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import category_encoders as ce
 from scipy import stats
+from typing import List, Callable, ClassVar
 
 def redirect_ratio(df):
     """
@@ -233,16 +234,26 @@ def convert_bool_to_num(value):
     return 0 if value else 1
 
 
-def all_preprocessing(raw_data, columns_to_process, target_creation_function, target,
-                        box_cox_columns=False, yeo_johnson_columns=False, min_max_scaling=False, log_transform_columns=False,
-                        od_encoding=False, operator_encoding=False,
+def all_preprocessing(raw_data:pd.DataFrame, columns_to_process:List[str], target_creation_function:Callable, target:str,
+                        box_cox_columns:List[str]=False, yeo_johnson_columns:List[str]=False, min_max_scaling:List[str]=False, log_transform_columns:List[str]=False,
+                        od_encoding:bool=False, operator_encoding:bool=False,
                         target_func_param1=None, target_func_param2=None, target_func_param3=None):
     """
     This functions completes all feature engineering, target creation and scaling
     RETURNS: updated dataframe and a Class that holds all the scalers
 
-    Notes:
-    - It will only return columns in columns_to_process and the target
+
+    columns_to_process: what you want it to return, if “daysofweek” it will only return the cosine columns
+
+    target_creation_function: function for making the target, allows for future flexibility
+
+    target = name of the target, this is so no encoders/scalers are looking for it in the new data
+
+    _column variables: the rest is just a list of columns that require different scaling/encoding.
+
+    _encoding: Boolean, True only if you want to encode
+
+    _func_params: Room for adding params to the target creation function.
     """
 
     #DATA CLEANING
@@ -432,12 +443,24 @@ def encoding_new_data(original_data, data_to_be_processed, column, encoder):
     return real_data
 
 
-def process_new_data(original_data, new_data, scalers, colums_to_keep,
-                     box_cox_columns=False, yeo_johnson_columns=False, log_transform_columns=False, min_max_columns=False,
-                     od_encoding=False, operator_encoding=False):
+def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers, colums_to_keep:List[str],
+                     box_cox_columns:List[str]=False, yeo_johnson_columns:List[str]=False, log_transform_columns:List[str]=False, min_max_columns:List[str]=False,
+                     od_encoding:bool=False, operator_encoding:bool=False):
     """
     This function processes new data, using scalers and encoders from the training set
     It only returns the columns stated in columns_to_keep, and encoded columns if those options flipped to True
+
+    original_data: This is used for encoding - can have dummy data if no encoding is taking place.
+
+    new_data: The data you are processing
+
+    scalers: Must be a Class variable of scalers from the all_preprocessing function
+
+    columns_to_keep: this is the list of columns you want to keep, if daysofweek, it only returns the cosin columns and drops daysofweek
+
+    _columns variables: List of columns you want in that scaling step
+
+    od_encoding + operator_encoding: Boolean, only flip if you want to encode new data.
     """
 
     # DATA CLEANING
@@ -446,7 +469,7 @@ def process_new_data(original_data, new_data, scalers, colums_to_keep,
     new_data['itinerary_fare'].fillna(new_data['booked_fare'], inplace=True)
 
     # Dropping data where itinerary_fare remains Null
-    clean_data = new_data.dropna(subset=['itinerary_fare']).copy()
+    clean_data = new_data.dropna(subset=['itinerary_fare']).copy().reset_index()
 
     # FEATURE ENGINEERING
     clean_data['DurationMin'] = clean_data['flight_time'] + clean_data['connection_time']
@@ -456,6 +479,15 @@ def process_new_data(original_data, new_data, scalers, colums_to_keep,
 
     clean_data['extra_travel_distance'] = clean_data['total_distance'] - clean_data['direct_distance']
     clean_data['extra_travel_distance_ratio'] =  clean_data['total_distance'] / clean_data['direct_distance']
+
+    if 'seg_0' not in clean_data.columns:
+        clean_data['seg_0'] = 0
+        clean_data['seg_1'] = 0
+
+        for i in range(len(clean_data)):
+            listtt = clean_data['flights'][i].split(',')
+            clean_data['seg_0'][i] = listtt[0][:2]
+            clean_data['seg_1'][i] = listtt[1].strip()[:2]
 
     # Renaming the columns
     col_rename_dict = {'origin': 'OriginApt', 'destination':'DestinationApt', 'days_to_travel':'TravelHorizonDays', 'total_distance':'Total_Flight_Distance',
@@ -490,17 +522,36 @@ def process_new_data(original_data, new_data, scalers, colums_to_keep,
     if operator_encoding:
         seg_0_op_iata = encoding_new_data(original_data, clean_data, 'Seg_0_OperatingCarrierIATA', scalers.seg_0_encoder)
         seg_1_op_iata = encoding_new_data(original_data, clean_data, 'Seg_1_OperatingCarrierIATA', scalers.seg_1_encoder)
-        seg_2_op_iata = encoding_new_data(original_data, clean_data, 'Seg_2_OperatingCarrierIATA', scalers.seg_2_encoder)
-        seg_3_op_iata = encoding_new_data(original_data, clean_data, 'Seg_3_OperatingCarrierIATA', scalers.seg_3_encoder)
+
+        if 'Seg_2_OperatingCarrierIATA' in clean_data.columns:
+            seg_2_op_iata = encoding_new_data(original_data, clean_data, 'Seg_2_OperatingCarrierIATA', scalers.seg_2_encoder)
+        else:
+            seg_2_op_iata = False
+
+        if 'Seg_3_OperatingCarrierIATA' in clean_data.columns:
+            seg_3_op_iata = encoding_new_data(original_data, clean_data, 'Seg_3_OperatingCarrierIATA', scalers.seg_3_encoder)
+        else:
+            seg_3_op_iata = False
 
         # Updating the dataset with the encoded columns
-        clean_data = pd.concat([clean_data, seg_0_op_iata, seg_1_op_iata, seg_2_op_iata, seg_3_op_iata], axis=1)
+
+        dfs_to_concat = [clean_data, seg_0_op_iata, seg_1_op_iata]
+
+        if seg_2_op_iata:
+            dfs_to_concat.append(seg_2_op_iata)
+        if seg_3_op_iata:
+            dfs_to_concat.append(seg_3_op_iata)
+
+        clean_data = pd.concat(dfs_to_concat, axis=1)
 
         # Ensuring the columns are returned at the end of the function
-        colums_to_keep.extend(seg_0_op_iata.columns.to_list())
-        colums_to_keep.extend(seg_1_op_iata.columns.to_list())
-        colums_to_keep.extend(seg_2_op_iata.columns.to_list())
-        colums_to_keep.extend(seg_3_op_iata.columns.to_list())
+        if operator_encoding:
+            colums_to_keep.extend(seg_0_op_iata.columns.to_list())
+            colums_to_keep.extend(seg_1_op_iata.columns.to_list())
+            if seg_2_op_iata:
+                colums_to_keep.extend(seg_2_op_iata.columns.to_list())
+            if seg_3_op_iata:
+                colums_to_keep.extend(seg_3_op_iata.columns.to_list())
 
 
     # SCALING
@@ -539,7 +590,6 @@ def process_new_data(original_data, new_data, scalers, colums_to_keep,
         data_to_return = data_to_return.drop(columns=['dayofweek']).copy()
 
     return data_to_return
-
 
 def classification_evaluation(Dohop_test_dataset, model, scaler):
     """ This function evaluates the regression model on the Dohop Test dataset.
