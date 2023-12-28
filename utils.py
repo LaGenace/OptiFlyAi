@@ -553,6 +553,7 @@ def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers,
             if seg_3_op_iata:
                 colums_to_keep.extend(seg_3_op_iata.columns.to_list())
 
+    colums_to_keep.append('bookings')
 
     # SCALING
     # Box cox
