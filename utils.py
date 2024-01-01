@@ -474,7 +474,6 @@ def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers,
     # FEATURE ENGINEERING
     clean_data['DurationMin'] = clean_data['flight_time'] + clean_data['connection_time']
 
-    clean_data['total_layover_time'] = clean_data['DurationMin'] - clean_data['flight_time']
     clean_data['total_layover_time_ratio'] = clean_data['connection_time'] / clean_data['DurationMin']
 
     clean_data['extra_travel_distance'] = clean_data['total_distance'] - clean_data['direct_distance']
