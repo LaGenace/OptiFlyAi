@@ -279,7 +279,10 @@ def all_preprocessing(raw_data:pd.DataFrame, columns_to_process:List[str], targe
     data_engineered = drop_neg_layover_time(raw_data)
 
     # Create the target
-    processed_data = target_creation_function(data_engineered, target_func_param1, target_func_param2, target_func_param3)
+    if target_func_param1:
+        processed_data = target_creation_function(data_engineered, target_func_param1, target_func_param2, target_func_param3)
+    else:
+        processed_data = target_creation_function(data_engineered)
 
     # Seperating target so encoders dont store a df shape that is larger than real-world data
     # This is so encoders do not expect the extra column when running on new data, which will not have a target
