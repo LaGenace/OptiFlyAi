@@ -699,6 +699,6 @@ def log_od_by_itredirects(data):
     """
     data['log_ODRedirects'] = np.log1p(data['ODRedirects'])
 
-    data['lod_od_by_itredirect'] = data['ItineraryRedirects'] * data['log_ODRedirects']
+    data['log_od_by_itredirect'] = data['ItineraryRedirects'] * data['log_ODRedirects']
 
     return data
