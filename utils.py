@@ -490,7 +490,7 @@ def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers,
     """
 
     # Creating a copy of the list so that we do not update the list outside of this function
-    list_of_columns = columns_to_keep
+    list_of_columns = columns_to_keep.copy()
 
     # DATA CLEANING
 
