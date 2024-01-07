@@ -543,49 +543,55 @@ def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers,
         combined_od_encoding = encoding_new_data(original_data=original_data, data_to_be_processed=clean_data, column='OD', encoder=scalers.od_encoder)
 
         # Updating the dataset with the encoded columns
-        clean_data = pd.concat([clean_data, combined_od_encoding], axis=1)
+        od_clean_data = pd.concat([clean_data, combined_od_encoding], axis=1)
 
         # Ensuring the columns are returned at the end of the function
         list_of_columns.extend(combined_od_encoding.columns.to_list())
 
+    else:
+        od_clean_data = clean_data.copy()
+
     if od_encoding:
         #Binary encoding origin
-        origin_encoded = encoding_new_data(original_data=original_data, data_to_be_processed=clean_data, column='OriginApt', encoder=scalers.o_encoder)
+        origin_encoded = encoding_new_data(original_data=original_data, data_to_be_processed=od_clean_data, column='OriginApt', encoder=scalers.o_encoder)
 
         # Binary encoding Destination
-        destination_encoded = encoding_new_data(original_data, clean_data, 'DestinationApt', scalers.d_encoder)
+        destination_encoded = encoding_new_data(original_data, od_clean_data, 'DestinationApt', scalers.d_encoder)
 
         # Updating the dataset with the encoded columns
-        clean_data = pd.concat([clean_data, origin_encoded, destination_encoded], axis=1)
+        both_ods_clean_data = pd.concat([od_clean_data, origin_encoded, destination_encoded], axis=1)
 
         # Ensuring the columns are returned at the end of the function
         list_of_columns.extend(origin_encoded.columns.to_list())
         list_of_columns.extend(destination_encoded.columns.to_list())
 
-    if operator_encoding:
-        seg_0_op_iata = encoding_new_data(original_data, clean_data, 'Seg_0_OperatingCarrierIATA', scalers.seg_0_encoder)
-        seg_1_op_iata = encoding_new_data(original_data, clean_data, 'Seg_1_OperatingCarrierIATA', scalers.seg_1_encoder)
+    else:
+        both_ods_clean_data = od_clean_data.copy()
 
-        if 'Seg_2_OperatingCarrierIATA' in clean_data.columns:
-            seg_2_op_iata = encoding_new_data(original_data, clean_data, 'Seg_2_OperatingCarrierIATA', scalers.seg_2_encoder)
+    if operator_encoding:
+        seg_0_op_iata = encoding_new_data(original_data, both_ods_clean_data, 'Seg_0_OperatingCarrierIATA', scalers.seg_0_encoder)
+        seg_1_op_iata = encoding_new_data(original_data, both_ods_clean_data, 'Seg_1_OperatingCarrierIATA', scalers.seg_1_encoder)
+
+        if 'Seg_2_OperatingCarrierIATA' in both_ods_clean_data.columns:
+            seg_2_op_iata = encoding_new_data(original_data, both_ods_clean_data, 'Seg_2_OperatingCarrierIATA', scalers.seg_2_encoder)
         else:
             seg_2_op_iata = False
 
-        if 'Seg_3_OperatingCarrierIATA' in clean_data.columns:
-            seg_3_op_iata = encoding_new_data(original_data, clean_data, 'Seg_3_OperatingCarrierIATA', scalers.seg_3_encoder)
+        if 'Seg_3_OperatingCarrierIATA' in both_ods_clean_data.columns:
+            seg_3_op_iata = encoding_new_data(original_data, both_ods_clean_data, 'Seg_3_OperatingCarrierIATA', scalers.seg_3_encoder)
         else:
             seg_3_op_iata = False
 
         # Updating the dataset with the encoded columns
 
-        dfs_to_concat = [clean_data, seg_0_op_iata, seg_1_op_iata]
+        dfs_to_concat = [both_ods_clean_data, seg_0_op_iata, seg_1_op_iata]
 
         if seg_2_op_iata:
             dfs_to_concat.append(seg_2_op_iata)
         if seg_3_op_iata:
             dfs_to_concat.append(seg_3_op_iata)
 
-        clean_data = pd.concat(dfs_to_concat, axis=1)
+        seg_clean_data = pd.concat(dfs_to_concat, axis=1)
 
         # Ensuring the columns are returned at the end of the function
         if operator_encoding:
@@ -595,6 +601,8 @@ def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers,
                 list_of_columns.extend(seg_2_op_iata.columns.to_list())
             if seg_3_op_iata:
                 list_of_columns.extend(seg_3_op_iata.columns.to_list())
+    else:
+        seg_clean_data = both_ods_clean_data.copy()
 
     list_of_columns.append('bookings')
 
@@ -602,28 +610,28 @@ def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers,
     # Box cox
     if box_cox_columns:
         for col in box_cox_columns:
-            clean_data.loc[:,col]  = stats.boxcox(clean_data[col], lmbda=scalers.box_lambda[col])
+            seg_clean_data.loc[:,col]  = stats.boxcox(seg_clean_data[col], lmbda=scalers.box_lambda[col])
 
     # Yeo-johnson
     if yeo_johnson_columns:
         for col in yeo_johnson_columns:
-            clean_data.loc[:,col] = stats.yeojohnson(clean_data[col], lmbda=scalers.yeo_lambda[col])
+            seg_clean_data.loc[:,col] = stats.yeojohnson(seg_clean_data[col], lmbda=scalers.yeo_lambda[col])
 
     # Log transformations
     if log_transform_columns:
         for col in log_transform_columns:
-            clean_data.loc[:,col] = np.log1p(clean_data[col])
+            seg_clean_data.loc[:,col] = np.log1p(seg_clean_data[col])
 
     #Min max scaling
     if min_max_columns:
         for col in min_max_columns:
-            clean_data.loc[:,col] = scalers.minmax_scaler[col].transform(clean_data[[col]])
+            seg_clean_data.loc[:,col] = scalers.minmax_scaler[col].transform(seg_clean_data[[col]])
 
     if 'SelfTransfer' in list_of_columns:
         #Inversing the importance of SelfTransfer, so Non Self Transfer is seen as better by the model
-        clean_data['SelfTransfer'] = clean_data['SelfTransfer'].apply(convert_bool_to_num)
+        seg_clean_data['SelfTransfer'] = seg_clean_data['SelfTransfer'].apply(convert_bool_to_num)
 
-    data_to_return = clean_data[list_of_columns].copy()
+    data_to_return = seg_clean_data[list_of_columns].copy()
 
     if 'dayofweek' in list_of_columns:
         # Cyclical encoding
