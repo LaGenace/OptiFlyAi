@@ -236,7 +236,7 @@ def convert_bool_to_num(value):
 
 def all_preprocessing(raw_data:pd.DataFrame, columns_to_process:List[str], target_creation_function:Callable, target:str,
                         box_cox_columns:List[str]=False, yeo_johnson_columns:List[str]=False, min_max_scaling:List[str]=False, log_transform_columns:List[str]=False,
-                        od_encoding:bool=False, operator_encoding:bool=False,
+                        od_encoding:bool=False, operator_encoding:bool=False, od_combined_encoding=False,
                         target_func_param1=None, target_func_param2=None, target_func_param3=None):
     """
     This functions completes all feature engineering, target creation and scaling
@@ -255,6 +255,9 @@ def all_preprocessing(raw_data:pd.DataFrame, columns_to_process:List[str], targe
 
     _func_params: Room for adding params to the target creation function.
     """
+
+    # Creating a copy of the list so that we do not update the list outside of this function
+    list_of_columns = columns_to_process.copy()
 
     #DATA CLEANING
 
@@ -291,41 +294,55 @@ def all_preprocessing(raw_data:pd.DataFrame, columns_to_process:List[str], targe
     model_data = processed_data.drop(columns=[target])
 
     #BINARY ENCODING
+    # Binary encoding combined OD
+    if od_combined_encoding:
+        od_encoder = ce.BinaryEncoder()
+        od_encoded_columns = od_encoder.fit_transform(model_data['OD'])
+        list_of_columns.extend(od_encoded_columns.columns.to_list())
+
+        #Concatinating newly encoded columns
+        combined_od_encoded = pd.concat([model_data, od_encoded_columns], axis=1)
+
+    else:
+        od_encoder = None
+        combined_od_encoded = model_data.copy()
+
+
     # Binary encoding origin and destination
     if od_encoding:
         o_encoder = ce.BinaryEncoder()
         origin_apt_encoded = o_encoder.fit_transform(model_data['OriginApt'])
-        columns_to_process.extend(origin_apt_encoded.columns.to_list())
+        list_of_columns.extend(origin_apt_encoded.columns.to_list())
 
         d_encoder = ce.BinaryEncoder()
         destination_apt_encoded = d_encoder.fit_transform(model_data['DestinationApt'])
-        columns_to_process.extend(destination_apt_encoded.columns.to_list())
+        list_of_columns.extend(destination_apt_encoded.columns.to_list())
 
         #Concatinating newly encoded columns
-        origin_binary = pd.concat([model_data, origin_apt_encoded], axis=1)
+        origin_binary = pd.concat([combined_od_encoded, origin_apt_encoded], axis=1)
         dest_binary = pd.concat([origin_binary, destination_apt_encoded], axis=1)
     else:
         o_encoder = None
         d_encoder = None
-        dest_binary = model_data.copy()
+        dest_binary = combined_od_encoded.copy()
 
     # Binary encoding Operator IATA'
     if operator_encoding:
         seg_0_encoder = ce.BinaryEncoder()
         seg_0_binary = seg_0_encoder.fit_transform(model_data['Seg_0_OperatingCarrierIATA'])
-        columns_to_process.extend(seg_0_binary.columns.to_list())
+        list_of_columns.extend(seg_0_binary.columns.to_list())
 
         seg_1_encoder = ce.BinaryEncoder()
         seg_1_binary = seg_1_encoder.fit_transform(model_data['Seg_1_OperatingCarrierIATA'])
-        columns_to_process.extend(seg_1_binary.columns.to_list())
+        list_of_columns.extend(seg_1_binary.columns.to_list())
 
         seg_2_encoder = ce.BinaryEncoder()
         seg_2_binary = seg_2_encoder.fit_transform(model_data['Seg_2_OperatingCarrierIATA'])
-        columns_to_process.extend(seg_2_binary.columns.to_list())
+        list_of_columns.extend(seg_2_binary.columns.to_list())
 
         seg_3_encoder = ce.BinaryEncoder()
         seg_3_binary = seg_3_encoder.fit_transform(model_data['Seg_3_OperatingCarrierIATA'])
-        columns_to_process.extend(seg_3_binary.columns.to_list())
+        list_of_columns.extend(seg_3_binary.columns.to_list())
 
         #Concatinating newly encoded columns
         seg0_bin = pd.concat([dest_binary, seg_0_binary], axis=1)
@@ -339,7 +356,7 @@ def all_preprocessing(raw_data:pd.DataFrame, columns_to_process:List[str], targe
         seg_3_encoder = None
         all_binary = dest_binary.copy()
 
-    all_binary = all_binary[columns_to_process]
+    all_binary = all_binary[list_of_columns].copy()
 
     #SCALING
     # Box cox
@@ -377,20 +394,21 @@ def all_preprocessing(raw_data:pd.DataFrame, columns_to_process:List[str], targe
             min_max_scalers[col] = minmax_scaler
 
 
-    if 'dayofweek' in columns_to_process:
+    if 'dayofweek' in list_of_columns:
         # Cyclical encoding
         all_binary['sin_day'] = np.sin(2 * np.pi * all_binary['dayofweek'] / 7)
         all_binary['cos_day'] = np.cos(2 * np.pi * all_binary['dayofweek'] / 7)
 
         all_binary.drop(columns='dayofweek', inplace=True)
 
-    if 'SelfTransfer' in columns_to_process:
+    if 'SelfTransfer' in list_of_columns:
         #Inversing the importance of SelfTransfer, so Non Self Transfer is seen as better by the model
         all_binary['SelfTransfer'] = all_binary['SelfTransfer'].apply(convert_bool_to_num)
 
     #STORING SCALERS
     class PreprocessScalers:
-        def __init__(self, o_encoder, d_encoder, box_lambdas, yeo_lambdas, min_max_scalers,seg_0_encoder, seg_1_encoder, seg_2_encoder, seg_3_encoder):
+        def __init__(self, od_encoder, o_encoder, d_encoder, box_lambdas, yeo_lambdas, min_max_scalers,seg_0_encoder, seg_1_encoder, seg_2_encoder, seg_3_encoder):
+                self.od_encoder = od_encoder
                 self.o_encoder = o_encoder
                 self.d_encoder = d_encoder
                 self.box_lambda = box_lambdas
@@ -401,7 +419,7 @@ def all_preprocessing(raw_data:pd.DataFrame, columns_to_process:List[str], targe
                 self.seg_2_encoder = seg_2_encoder
                 self.seg_3_encoder = seg_3_encoder
 
-    scalers = PreprocessScalers(o_encoder, d_encoder, box_lambdas, yeo_lambdas, min_max_scalers, seg_0_encoder, seg_1_encoder, seg_2_encoder, seg_3_encoder)
+    scalers = PreprocessScalers(od_encoder, o_encoder, d_encoder, box_lambdas, yeo_lambdas, min_max_scalers, seg_0_encoder, seg_1_encoder, seg_2_encoder, seg_3_encoder)
 
     #Adding y into dataset
     all_binary[target] = y
@@ -446,14 +464,18 @@ def encoding_new_data(original_data, data_to_be_processed, column, encoder):
     return real_data
 
 
-def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers, colums_to_keep:List[str],
+def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers, columns_to_keep:List[str],
                      box_cox_columns:List[str]=False, yeo_johnson_columns:List[str]=False, log_transform_columns:List[str]=False, min_max_columns:List[str]=False,
-                     od_encoding:bool=False, operator_encoding:bool=False):
+                     od_encoding:bool=False, operator_encoding:bool=False, od_combined_encoding=False):
     """
     This function processes new data, using scalers and encoders from the training set
     It only returns the columns stated in columns_to_keep, and encoded columns if those options flipped to True
 
-    original_data: This is used for encoding - can have dummy data if no encoding is taking place.
+    original_data:
+                This is used for encoding - can have dummy data if no encoding is taking place.
+                IMPORTANT: Use the index of your processed data to slice the original_data.
+                In order to encode OD's we need to re-create the OD column in original_data.
+                We are slicing by data that we train on so no encoded columns stay consistent
 
     new_data: The data you are processing
 
@@ -464,7 +486,11 @@ def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers,
     _columns variables: List of columns you want in that scaling step
 
     od_encoding + operator_encoding: Boolean, only flip if you want to encode new data.
+
     """
+
+    # Creating a copy of the list so that we do not update the list outside of this function
+    list_of_columns = columns_to_keep.copy()
 
     # DATA CLEANING
 
@@ -481,6 +507,11 @@ def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers,
 
     clean_data['extra_travel_distance'] = clean_data['total_distance'] - clean_data['direct_distance']
     clean_data['extra_travel_distance_ratio'] =  clean_data['total_distance'] / clean_data['direct_distance']
+
+    # Creating OD column in both original and new data, otherwise the binary encoders will not have the reference point for original information
+    clean_data['OD'] = clean_data['origin'] + clean_data['destination']
+
+    original_data['OD'] = original_data['OriginApt'] + original_data['DestinationApt']
 
     if 'seg_0' not in clean_data.columns:
         clean_data['seg_0'] = 0
@@ -507,84 +538,102 @@ def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers,
         clean_data[column] = clean_data[column].astype('float64')
 
     # ENCODING
-    if od_encoding:
+    if od_combined_encoding:
         #Binary encoding origin
-        origin_encoded = encoding_new_data(original_data=original_data, data_to_be_processed=clean_data, column='OriginApt', encoder=scalers.o_encoder)
-
-        # Binary encoding Destination
-        destination_encoded = encoding_new_data(original_data, clean_data, 'DestinationApt', scalers.d_encoder)
+        combined_od_encoding = encoding_new_data(original_data=original_data, data_to_be_processed=clean_data, column='OD', encoder=scalers.od_encoder)
 
         # Updating the dataset with the encoded columns
-        clean_data = pd.concat([clean_data, origin_encoded, destination_encoded], axis=1)
+        od_clean_data = pd.concat([clean_data, combined_od_encoding], axis=1)
 
         # Ensuring the columns are returned at the end of the function
-        colums_to_keep.extend(origin_encoded.columns.to_list())
-        colums_to_keep.extend(destination_encoded.columns.to_list())
+        list_of_columns.extend(combined_od_encoding.columns.to_list())
+
+    else:
+        od_clean_data = clean_data.copy()
+
+    if od_encoding:
+        #Binary encoding origin
+        origin_encoded = encoding_new_data(original_data=original_data, data_to_be_processed=od_clean_data, column='OriginApt', encoder=scalers.o_encoder)
+
+        # Binary encoding Destination
+        destination_encoded = encoding_new_data(original_data, od_clean_data, 'DestinationApt', scalers.d_encoder)
+
+        # Updating the dataset with the encoded columns
+        both_ods_clean_data = pd.concat([od_clean_data, origin_encoded, destination_encoded], axis=1)
+
+        # Ensuring the columns are returned at the end of the function
+        list_of_columns.extend(origin_encoded.columns.to_list())
+        list_of_columns.extend(destination_encoded.columns.to_list())
+
+    else:
+        both_ods_clean_data = od_clean_data.copy()
 
     if operator_encoding:
-        seg_0_op_iata = encoding_new_data(original_data, clean_data, 'Seg_0_OperatingCarrierIATA', scalers.seg_0_encoder)
-        seg_1_op_iata = encoding_new_data(original_data, clean_data, 'Seg_1_OperatingCarrierIATA', scalers.seg_1_encoder)
+        seg_0_op_iata = encoding_new_data(original_data, both_ods_clean_data, 'Seg_0_OperatingCarrierIATA', scalers.seg_0_encoder)
+        seg_1_op_iata = encoding_new_data(original_data, both_ods_clean_data, 'Seg_1_OperatingCarrierIATA', scalers.seg_1_encoder)
 
-        if 'Seg_2_OperatingCarrierIATA' in clean_data.columns:
-            seg_2_op_iata = encoding_new_data(original_data, clean_data, 'Seg_2_OperatingCarrierIATA', scalers.seg_2_encoder)
+        if 'Seg_2_OperatingCarrierIATA' in both_ods_clean_data.columns:
+            seg_2_op_iata = encoding_new_data(original_data, both_ods_clean_data, 'Seg_2_OperatingCarrierIATA', scalers.seg_2_encoder)
         else:
             seg_2_op_iata = False
 
-        if 'Seg_3_OperatingCarrierIATA' in clean_data.columns:
-            seg_3_op_iata = encoding_new_data(original_data, clean_data, 'Seg_3_OperatingCarrierIATA', scalers.seg_3_encoder)
+        if 'Seg_3_OperatingCarrierIATA' in both_ods_clean_data.columns:
+            seg_3_op_iata = encoding_new_data(original_data, both_ods_clean_data, 'Seg_3_OperatingCarrierIATA', scalers.seg_3_encoder)
         else:
             seg_3_op_iata = False
 
         # Updating the dataset with the encoded columns
 
-        dfs_to_concat = [clean_data, seg_0_op_iata, seg_1_op_iata]
+        dfs_to_concat = [both_ods_clean_data, seg_0_op_iata, seg_1_op_iata]
 
         if seg_2_op_iata:
             dfs_to_concat.append(seg_2_op_iata)
         if seg_3_op_iata:
             dfs_to_concat.append(seg_3_op_iata)
 
-        clean_data = pd.concat(dfs_to_concat, axis=1)
+        seg_clean_data = pd.concat(dfs_to_concat, axis=1)
 
         # Ensuring the columns are returned at the end of the function
         if operator_encoding:
-            colums_to_keep.extend(seg_0_op_iata.columns.to_list())
-            colums_to_keep.extend(seg_1_op_iata.columns.to_list())
+            list_of_columns.extend(seg_0_op_iata.columns.to_list())
+            list_of_columns.extend(seg_1_op_iata.columns.to_list())
             if seg_2_op_iata:
-                colums_to_keep.extend(seg_2_op_iata.columns.to_list())
+                list_of_columns.extend(seg_2_op_iata.columns.to_list())
             if seg_3_op_iata:
-                colums_to_keep.extend(seg_3_op_iata.columns.to_list())
+                list_of_columns.extend(seg_3_op_iata.columns.to_list())
+    else:
+        seg_clean_data = both_ods_clean_data.copy()
 
-    colums_to_keep.append('bookings')
+    list_of_columns.append('bookings')
 
     # SCALING
     # Box cox
     if box_cox_columns:
         for col in box_cox_columns:
-            clean_data.loc[:,col]  = stats.boxcox(clean_data[col], lmbda=scalers.box_lambda[col])
+            seg_clean_data.loc[:,col]  = stats.boxcox(seg_clean_data[col], lmbda=scalers.box_lambda[col])
 
     # Yeo-johnson
     if yeo_johnson_columns:
         for col in yeo_johnson_columns:
-            clean_data.loc[:,col] = stats.yeojohnson(clean_data[col], lmbda=scalers.yeo_lambda[col])
+            seg_clean_data.loc[:,col] = stats.yeojohnson(seg_clean_data[col], lmbda=scalers.yeo_lambda[col])
 
     # Log transformations
     if log_transform_columns:
         for col in log_transform_columns:
-            clean_data.loc[:,col] = np.log1p(clean_data[col])
+            seg_clean_data.loc[:,col] = np.log1p(seg_clean_data[col])
 
     #Min max scaling
     if min_max_columns:
         for col in min_max_columns:
-            clean_data.loc[:,col] = scalers.minmax_scaler[col].transform(clean_data[[col]])
+            seg_clean_data.loc[:,col] = scalers.minmax_scaler[col].transform(seg_clean_data[[col]])
 
-    if 'SelfTransfer' in colums_to_keep:
+    if 'SelfTransfer' in list_of_columns:
         #Inversing the importance of SelfTransfer, so Non Self Transfer is seen as better by the model
-        clean_data['SelfTransfer'] = clean_data['SelfTransfer'].apply(convert_bool_to_num)
+        seg_clean_data['SelfTransfer'] = seg_clean_data['SelfTransfer'].apply(convert_bool_to_num)
 
-    data_to_return = clean_data[colums_to_keep].copy()
+    data_to_return = seg_clean_data[list_of_columns].copy()
 
-    if 'dayofweek' in colums_to_keep:
+    if 'dayofweek' in list_of_columns:
         # Cyclical encoding
         data_to_return['sin_day'] = np.sin(2 * np.pi * data_to_return['dayofweek'] / 7)
         data_to_return['cos_day'] = np.cos(2 * np.pi * data_to_return['dayofweek'] / 7)
@@ -652,3 +701,13 @@ def classification_evaluation(Dohop_test_dataset, model, scaler=None):
                }
 
     return metrics
+
+def log_od_by_itredirects(data):
+    """
+    This function creates a target. log(ODRedirects) * ItineraryRedirects
+    """
+    data['log_ODRedirects'] = np.log1p(data['ODRedirects'])
+
+    data['log_od_by_itredirect'] = data['ItineraryRedirects'] * data['log_ODRedirects']
+
+    return data
