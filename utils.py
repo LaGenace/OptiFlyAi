@@ -643,7 +643,7 @@ def process_new_data(original_data:pd.DataFrame, new_data:pd.DataFrame, scalers,
 
     return data_to_return
 
-def classification_evaluation(Dohop_test_dataset, model, scaler=None):
+def classification_evaluation(Dohop_test_dataset, model, scaler):
     """ This function evaluates the regression model on the Dohop Test dataset.
     It scales the dataset and applies the model to it.
     It then buckets the dohop dataset into 2 buckets: booked and not booked.
@@ -660,13 +660,12 @@ def classification_evaluation(Dohop_test_dataset, model, scaler=None):
 
     data.drop(columns=["bookings"], inplace=True)
 
-    if scaler:
-        data = scaler.transform(data)
+    data = scaler.transform(data)
 
-        # Create a new DataFrame with the scaled data
-        # Exclude the 'bookings' column from the columns list
-        scaled_columns = [col for col in Dohop_test_dataset.columns if col != 'bookings']
-        data = pd.DataFrame(data, columns=scaled_columns)
+    # Create a new DataFrame with the scaled data
+    # Exclude the 'bookings' column from the columns list
+    scaled_columns = [col for col in Dohop_test_dataset.columns if col != 'bookings']
+    data = pd.DataFrame(data, columns=scaled_columns)
 
     # Applying the prediction model to the Dohop dataset and adding as new column
     data["predicted_score"] = model.predict(data).flatten()
